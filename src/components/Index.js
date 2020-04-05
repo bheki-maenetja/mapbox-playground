@@ -2,6 +2,8 @@ import React from 'react'
 import { BrowserRouter, Switch, Route } from 'react-router-dom'
 
 import 'bulma'
+import 'animate.css'
+import '@fortawesome/fontawesome-free/css/all.css'
 
 import WorldMap from './WorldMap'
 import CityMap from './CityMap'

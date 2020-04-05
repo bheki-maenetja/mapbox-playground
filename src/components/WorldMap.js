@@ -1,7 +1,7 @@
 import React from 'react'
 import axios from 'axios'
 
-import MapGl, { Marker } from 'react-map-gl'
+import MapGl, { Marker, Popup, NavigationControl } from 'react-map-gl'
 import 'mapbox-gl/dist/mapbox-gl.js'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
@@ -16,20 +16,18 @@ class WorldMap extends React.Component {
       longitude: 0,
       zoom: 2,
       bearing: 0,
-      pitch: 0
+      pitch: 0,
+      center: [0,0]
     },
     capitals: null,
-    weatherData: []
+    weatherData: [],
+    currentCap: null,
   }
 
   async componentDidMount() {
     try {
-      const res = await Promise.all([
-        axios.get(`http://api.openweathermap.org/data/2.5/weather?q=Johannesburg&units=metric&appid=${weatherKey}`),
-        axios.get('https://restcountries.eu/rest/v2/all')
-      ])
-      console.log(res[2])
-      const capital_names = res[1].data.map(count => count.capital).filter(cap => cap)
+      const res = await axios.get('https://restcountries.eu/rest/v2/all')
+      const capital_names = res.data.map(count => count.capital).filter(cap => cap)
       const capitals = []
       capital_names.map(async cap => {
         try {
@@ -39,14 +37,39 @@ class WorldMap extends React.Component {
           console.log(err)
         }
       })
-      this.setState({ capitals, weatherData: res[0].data })
+      this.setState({ capitals })
     } catch(err) {
       console.log(err)
     }
   }
 
+  getWeatherData = async (cap) => {
+    try {
+      const res = await axios.get(`http://api.openweathermap.org/data/2.5/weather?q=${cap.name}&units=metric&appid=${weatherKey}`)
+      const weatherData = {
+        description: res.data.weather[0].description,
+        temp: res.data.main.temp,
+        temp_min: res.data.main.temp_min,
+        temp_max: res.data.main.temp_max,
+        humidity: res.data.main.humidity,
+        wind_speed: res.data.wind.speed 
+      }
+      this.setState({ weatherData })
+    } catch (err) {
+      console.log(err)
+    }
+  }
+
+  goToCity = async (cap) => {
+    this.setState({  
+      currentCap: cap,
+      viewport: {...this.state.viewport, latitude: cap.location[1], longitude: cap.location[0], zoom: 8, center: cap.location } 
+    })
+    this.getWeatherData(cap)
+  }
+
   render() {
-    const { capitals } = this.state
+    const { capitals, currentCap, weatherData } = this.state
     if (!capitals) return false
     return (
       <>
@@ -60,7 +83,7 @@ class WorldMap extends React.Component {
           mapStyle="mapbox://styles/mapbox/satellite-streets-v11"
           mapboxApiAccessToken={mapboxToken}
           {...this.state.viewport}
-          onViewportChange={viewport => this.setState({ viewport })}
+          onViewportChange={viewport => this.setState({ viewport, currentCap: null, weatherData: [] })}
         >
           {capitals.map((cap, i) => (
             <>
@@ -69,10 +92,28 @@ class WorldMap extends React.Component {
                 latitude={cap.location[1]} 
                 longitude={cap.location[0]}
               >
-                <div>🔥</div>
+                <div onClick={() => this.goToCity(cap)}>🔥</div>
               </Marker>
+              <div style={{ position: 'absolute', right: 0 }}>
+                <NavigationControl />
+              </div>
             </>
           ))}
+          {currentCap &&
+            <Popup
+              latitude={currentCap.location[1]}
+              longitude={currentCap.location[0]}
+              closeOnClick={true}
+            >
+              <h1 className="title is-5">{currentCap.name}</h1>
+              <p>{weatherData.description}</p>
+              <p><i className="fas fa-thermometer-half"></i> {Math.round(weatherData.temp)}°C</p>
+              <p><i className="fas fa-temperature-low"></i> {Math.round(weatherData.temp_min)}°C</p>
+              <p><i className="fas fa-temperature-high"></i> {Math.round(weatherData.temp_max)}°C</p>
+              <p><i className="fas fa-wind"></i> {Math.round(weatherData.wind_speed * 3.6)} kph</p>
+              <p><i className="fas fa-tint"></i> {weatherData.humidity}%</p>
+            </Popup>
+            }
         </MapGl>
       </section>
       </>
